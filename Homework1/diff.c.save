@@ -1,0 +1,23 @@
+#include "stdlib.h"
+
+struct Node
+{
+	char word[256];
+	Node* next;
+
+}
+
+int main()
+{
+	
+}
+
+void testLinkedList( Node* myNode)
+{
+	Node* cur = myNode;
+	while( cur)
+	{
+		printf( cur->word);
+					cur = cur->next;
+	}
+}

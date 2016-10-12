@@ -1,4 +1,3 @@
-Operating-Systems
 # Operating Systems
 
 Course material (homeworks, projects etc.) of my very favorite course.  

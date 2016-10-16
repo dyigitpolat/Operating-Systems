@@ -50,6 +50,8 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
   long int i;
   char* buffer;
   long long int c;
+  struct ListNode* queueHead;
+  struct ListNode* queueCur;
 
   //say hi
   printf( "worker:%d/%d, mqid:%d, fd:%d, fsize:%d\n", proc+1, n, mq, fd, filesize);
@@ -77,11 +79,12 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
   //check. (no null termination in this print function; too bad.)
   //printf( "proc: %d reads -> %s\n", proc, buffer);
 
-  //TODO: what is item count??
   item_count = read_len / 8;
 
   printf( "item count at %d : %ld\n", proc, item_count);
 
+
+  // debug purposed code..
   printf("BEFORE SORT:\n");
   for( i = 0; i < item_count; i++)
   {
@@ -89,11 +92,10 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
   }
   printf( "\n");
 
-  //does it fully fully work??
-  //TODO: qsort array,
   qsort( buffer, item_count, sizeof( long long int), comp64);
-  //not sure for now...
 
+
+  // debug purposed code..
   printf("AFTER SORT:\n");
   for( i = 0; i < item_count; i++)
   {
@@ -101,25 +103,58 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
   }
   printf( "\n");
 
-  //TODO: fill LL
+
+  //TODO: fill LL,
+  queueHead = (struct ListNode*) malloc( sizeof( struct ListNode));
+  queueCur = queueHead;
+
+  for( i = 0; i < item_count; i++)
+  {
+    queueCur->val = ((long long*)buffer)[i];
+    queueCur->next = (struct ListNode*) malloc( sizeof( struct ListNode));
+    queueCur = queueCur->next;
+  }
+  queueCur->val = 0; //last is zero
+
+  //DEBUG LL
+  queueCur = queueHead;
+  for( i = 0; i < item_count; i++)
+  {
+    printf( "PROC: %lld, node %ld: %lld \n", proc, i, queueCur->val);
+    queueCur = queueCur->next;
+  }
+
 
   //TODO: send messages.
-  c = proc;
-  printf("message sending c = %lld\n", c);
-  mq_send(mq, (char*) &c, 8, 0);
+  queueCur = queueHead;
+  for( i = 0; i < item_count; i++)
+  {
+    mq_send(mq, (char*) &queueCur->val, 8, 0);
+    queueCur = queueCur->next;
+  }
 
   //bye bye
   free( buffer);
+
+  //freelist.
 
 }
 
 int main(int argc, char** argv)
 {
+  //arrays
   mqd_t* mq_arr;
   struct mq_attr* attr_arr;
   pid_t* pid_arr;
+  int* done_arr;
+  long long int* merge_buffer;
+  long long int* sorted_arr;
+
+  //other variables
   int n;
-  int i;
+  long long int i;
+  long long int j;
+  long long int received;
   int in_fd;
   int out_fd;
   size_t filesize;
@@ -202,24 +237,61 @@ int main(int argc, char** argv)
     if( !pid_arr[i]) //worker only zone.
     {
       workerProcess(mq_arr[i], attr_arr[i], i, n, in_fd, filesize); // go gog o
-      printf("I have done my job: %d\n", i);
+
       exit(0);
     }
   }
 
+
+
+  printf( "no problemo\n");
   //wait for the messages
   //TODO: receive messages... merge while receiving
   //loop until no msgs
-  for ( i = 0; i < n; i++)
+  done_arr = (int*) malloc( n * sizeof(int) );
+  merge_buffer = ( long long int*) malloc( n * sizeof(long long));
+  sorted_arr = ( long long int*) malloc( filesize);
+  memset( done_arr, 0, n * sizeof(int));
+
+  j = 0;
+  for( received = 0; received < filesize / 8;)
   {
-    mq_receive( mq_arr[i], (char*) &c[i], attr_arr[i].mq_msgsize, 0);
-    printf("RECEIVED msg: %lld\n", c[i]);
+    for ( i = 0; i < n; i++)
+    {
+      if( !done_arr[i])
+        mq_receive( mq_arr[i], (char*) &merge_buffer[i], attr_arr[i].mq_msgsize, 0);
+      else
+        printf("DONE: PROC:%lld\n", i);
+
+      printf( "%lld: received %lld from %lld\n", received, merge_buffer[i], i);
+      if( merge_buffer[i])
+        received++;
+      else
+        done_arr[i] = 1;
+    }
+
+    qsort( merge_buffer, n, sizeof( long long int), comp64);
+
+    for ( i = 0; i < n; i++)
+    {
+      if( merge_buffer[i])
+        sorted_arr[j++] = merge_buffer[i];
+    }
   }
   //merge run
   //endwhile
 
+  for( i = 0; i < filesize / 8; i++)
+  {
+    printf( "%lld, ", sorted_arr[i]);
+  }
+  printf( "\n");
+
 
   //TODO: write sorted list to file.
+  //
+  //
+  //
 
   //better wait.
   for( i = 0; i < n; i++)
@@ -228,13 +300,23 @@ int main(int argc, char** argv)
   }
 
   //nothing to do here, set everything on fire.
+  mq_unlink("/mqname1");
+  mq_unlink("/mqname2");
+  mq_unlink("/mqname3");
+  mq_unlink("/mqname4");
+  mq_unlink("/mqname5");
   for( i = 0; i < n; i++)
   {
     mq_close( mq_arr[i]);
   }
+  //
   close( in_fd);
   close( out_fd);
 
+  //dealloc arrays.
+  free( merge_buffer);
+  free( sorted_arr);
+  free( done_arr);
   free( pid_arr);
   free( mq_arr);
   free( attr_arr);

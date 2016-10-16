@@ -8,30 +8,24 @@
 #define MAX_WORKERS 5
 #define MIN_WORKERS 1
 
+struct ListNode
+{
+  long long int val;
+  struct ListNode* next;
+};
+
 void workerProcess( mqd_t mq, struct mq_attr attr, int i, int n, int fd, int filesize);
 int wait();
-
-void childProcess( mqd_t mq)
-{
-  char* message;
-
-  // allocate space for our message!
-  message = (char*) malloc( 8192);
-  strcpy( message, "selamun aleyküm bilal emmi\n"); // whats gonna be send there?
-  printf( "sending into mq: %d\n", mq); // double cheeck
-  mq_send( mq, message, 8192, 0); // launch!
-  free(message); //bye bye!
-
-}
 
 void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int filesize)
 {
   long int longs_count;
+  long int item_count;
   long int offset;
   long int read_len;
   long int i;
   char* buffer;
-  long long int* arr;
+  long long int c;
 
   //say hi
   printf( "worker:%d/%d, mqid:%d, fd:%d, fsize:%d\n", proc+1, n, mq, fd, filesize);
@@ -50,7 +44,7 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
   }
   printf( "proc: %d offset -> %ld, read_len -> %ld\n", proc, offset, read_len);
 
-  buffer = (long long int*) malloc( read_len * sizeof(char));
+  buffer = (char*) malloc( read_len * sizeof(char));
 
   //offset read.
   lseek(fd, offset, 0);
@@ -60,27 +54,19 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
   printf( "proc: %d reads -> %s\n", proc, buffer);
 
   //TODO: what is item count??
-  item_count = 0;
-
-  //TODO: init. array
-  //bullshit. use buffer directly, cast to long long int* and its done.
-  arr = ( long long int*) malloc( sizeof( long long int) * item_count);
-
-  //TODO: fill array
-  for(i = 0; buffer[i]; i++)
-  {
-
-  }
 
   //TODO: qsort array, TODO: comp func.
 
   //TODO: fill LL
 
   //TODO: send messages.
+  c = proc;
+  printf("message sending c = %lld\n", c);
+  mq_send(mq, &c, 8, 0);
+  printf("message SENT. c = %lld\n", c);
 
   //bye bye
   free( buffer);
-  free( arr);
 
 }
 
@@ -94,6 +80,8 @@ int main(int argc, char** argv)
   int in_fd;
   int out_fd;
   size_t filesize;
+
+  long long int c[5];
 
   //usage check
   if( argc != 4)
@@ -140,7 +128,23 @@ int main(int argc, char** argv)
   //init message queues, pass them to workers
   for( i = 0; i < n; i++)
   {
-    mq_arr[i] = mq_open("/mqname1", O_RDWR | O_CREAT, 0666, NULL);
+    switch (i) {
+      case 0:
+        mq_arr[i] = mq_open("/mqname1", O_RDWR | O_CREAT, 0666, NULL);
+        break;
+      case 1:
+        mq_arr[i] = mq_open("/mqname2", O_RDWR | O_CREAT, 0666, NULL);
+        break;
+      case 2:
+        mq_arr[i] = mq_open("/mqname3", O_RDWR | O_CREAT, 0666, NULL);
+        break;
+      case 3:
+        mq_arr[i] = mq_open("/mqname4", O_RDWR | O_CREAT, 0666, NULL);
+        break;
+      case 4:
+        mq_arr[i] = mq_open("/mqname5", O_RDWR | O_CREAT, 0666, NULL);
+        break;
+    }
 
     if( mq_arr[i] == -1) //mq failure..
     {
@@ -155,12 +159,19 @@ int main(int argc, char** argv)
     if( !pid_arr[i]) //worker only zone.
     {
       workerProcess(mq_arr[i], attr_arr[i], i, n, in_fd, filesize); // go gog o
+      printf("I have done my job: %d\n", i);
       exit(0);
     }
   }
 
   //wait for the messages
   //TODO: receive messages...
+  for ( i = 0; i < n; i++)
+  {
+    mq_receive( mq_arr[i], &c[i], attr_arr[i].mq_msgsize, 0);
+    printf("RECEIVED msg: %lld\n", c[i]);
+  }
+
   // do together...
   //TODO: merge messages...
 
@@ -179,58 +190,10 @@ int main(int argc, char** argv)
   }
   close( in_fd);
   close( out_fd);
+
   free( pid_arr);
   free( mq_arr);
   free( attr_arr);
 
-
-  /*
-  *
-  * BELOW ARE TO BE DELETED
-  *
-  */
-
-  mqd_t mq;
-  struct mq_attr mq_attr;
-  char* message;
-  int a;
-  /* just shown one message queue creation. More needed if more than
-  one child needs to be created.
-  */
-  mq = mq_open("/mqname1", O_RDWR | O_CREAT, 0666, NULL);
-
-  // is there any problem boy?
-  if (mq == -1)
-  {
-    perror("can not create msg queue\n");
-    exit(1);
-  }
-
-  // info about the message queue created...
-  printf("mq created, mq id = %d\n", (int) mq);
-  mq_getattr(mq, &mq_attr);
-  printf("mq maximum msgsize = %d\n", (int) mq_attr.mq_msgsize);
-
-  //lets create our child process and give her a job.
-  a = fork();
-  if( a == 0)
-  {
-    childProcess(mq);
-    exit(0);
-  }
-
-  //allocate space for the message and wait for it...
-  message = (char*) malloc (8192);
-  // this is how you receive the message, simple enough!
-  mq_receive(mq, message, 8192, 0);
-  wait(); //not really necessary but we should keep things neat.
-
-  //lets see if our message is correctly received.
-  printf("message received from mq:%d -> %s\n", mq, message);
-
-
-  //we are turning stuff off...
-  free(message);
-  mq_close(mq);
   return 0;
 }

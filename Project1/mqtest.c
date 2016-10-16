@@ -5,20 +5,6 @@
 #include <errno.h>
 #include <string.h>
 
-int readLongs( FILE* fp, long int* arr)
-{
-  char c;
-  int i;
-
-  // linked list agen??? :////////
-  i = 0;
-  while( ( c = getc(fp)) != EOF)
-  {
-    arr[i/4] = ( arr[i/4] << ( 8 * ( i % 4))) | c;
-  }
-  return 0;
-}
-
 int childProcess( mqd_t mq)
 {
   char* message;

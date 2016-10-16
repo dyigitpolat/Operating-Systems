@@ -16,6 +16,13 @@ struct ListNode
 
 void workerProcess( mqd_t mq, struct mq_attr attr, int i, int n, int fd, int filesize);
 int wait();
+int comp64( const void* a, const void* b);
+
+// a > b
+int comp64( const void* a, const void* b)
+{
+  return (*( long long int*)a) - (*( long long int*)b);
+}
 
 void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int filesize)
 {
@@ -55,7 +62,7 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
 
   //TODO: what is item count??
 
-  //TODO: qsort array, TODO: comp func.
+  //TODO: qsort array,
 
   //TODO: fill LL
 

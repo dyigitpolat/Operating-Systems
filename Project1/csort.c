@@ -165,15 +165,16 @@ int main(int argc, char** argv)
   }
 
   //wait for the messages
-  //TODO: receive messages...
+  //TODO: receive messages... merge while receiving
+  //loop until no msgs
   for ( i = 0; i < n; i++)
   {
     mq_receive( mq_arr[i], &c[i], attr_arr[i].mq_msgsize, 0);
     printf("RECEIVED msg: %lld\n", c[i]);
   }
+  //merge run
+  //endwhile
 
-  // do together...
-  //TODO: merge messages...
 
   //TODO: write sorted list to file.
 

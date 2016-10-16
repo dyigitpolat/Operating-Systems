@@ -21,7 +21,24 @@ int comp64( const void* a, const void* b);
 // a > b
 int comp64( const void* a, const void* b)
 {
-  return (*( long long int*)a) - (*( long long int*)b);
+  long long int aval;
+  long long int bval;
+
+  aval = *( long long int*)a;
+  bval = *( long long int*)b;
+
+  if( aval > bval)
+  {
+    return 1;
+  }
+  else if( aval < bval)
+  {
+    return -1;
+  }
+  else
+  {
+    return 0;
+  }
 }
 
 void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int filesize)
@@ -57,20 +74,39 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
   lseek(fd, offset, 0);
   read(fd, buffer, read_len);
 
-  //check.
-  printf( "proc: %d reads -> %s\n", proc, buffer);
+  //check. (no null termination in this print function; too bad.)
+  //printf( "proc: %d reads -> %s\n", proc, buffer);
 
   //TODO: what is item count??
+  item_count = read_len / 8;
 
+  printf( "item count at %d : %ld\n", proc, item_count);
+
+  printf("BEFORE SORT:\n");
+  for( i = 0; i < item_count; i++)
+  {
+    printf( "%lld, ", ((long long int*)buffer)[i]);
+  }
+  printf( "\n");
+
+  //does it fully fully work??
   //TODO: qsort array,
+  qsort( buffer, item_count, sizeof( long long int), comp64);
+  //not sure for now...
+
+  printf("AFTER SORT:\n");
+  for( i = 0; i < item_count; i++)
+  {
+    printf( "%lld, ", ((unsigned long long int*)buffer)[i]);
+  }
+  printf( "\n");
 
   //TODO: fill LL
 
   //TODO: send messages.
   c = proc;
   printf("message sending c = %lld\n", c);
-  mq_send(mq, &c, 8, 0);
-  printf("message SENT. c = %lld\n", c);
+  mq_send(mq, (char*) &c, 8, 0);
 
   //bye bye
   free( buffer);
@@ -176,7 +212,7 @@ int main(int argc, char** argv)
   //loop until no msgs
   for ( i = 0; i < n; i++)
   {
-    mq_receive( mq_arr[i], &c[i], attr_arr[i].mq_msgsize, 0);
+    mq_receive( mq_arr[i], (char*) &c[i], attr_arr[i].mq_msgsize, 0);
     printf("RECEIVED msg: %lld\n", c[i]);
   }
   //merge run

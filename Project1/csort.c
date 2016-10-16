@@ -63,6 +63,7 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
   item_count = 0;
 
   //TODO: init. array
+  //bullshit. use buffer directly, cast to long long int* and its done.
   arr = ( long long int*) malloc( sizeof( long long int) * item_count);
 
   //TODO: fill array

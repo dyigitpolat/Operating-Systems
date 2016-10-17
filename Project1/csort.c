@@ -17,9 +17,25 @@ struct ListNode
 void workerProcess( mqd_t mq, struct mq_attr attr, int i, int n, int fd, int filesize);
 int wait();
 int comp64( const void* a, const void* b);
-struct ListNode* receiveAndMerge( mqd_t* mq_arr, int n, long item_count); //TODO
-void writeToFile( FILE* fp, struct ListNode* sortedList); //TODO
-void freeList( struct ListNode* mynode);
+struct ListNode* receiveAndMerge( mqd_t* mq_arr, int n, long item_count);
+void writeToFile( int fd, struct ListNode* sortedList); //TODO
+void freeList( struct ListNode* mynode); //TODO
+
+void writeToFile( int fd, struct ListNode* sortedList)
+{
+  char number[128];
+  int i;
+
+  while( sortedList && sortedList->val)
+  {
+    sprintf(number, "%llu", sortedList->val);
+    i = -1;
+    while( number[++i]);
+    write( fd, number,i);
+    write( fd, "\n", 1);
+    sortedList = sortedList->next;
+  }
+}
 
 struct ListNode* receiveAndMerge( mqd_t* mq_arr, int n, long item_count)
 {
@@ -324,7 +340,7 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
   //bye bye
   free( buffer);
 
-  //freelist.
+  //TODO: freelist.
 
 }
 
@@ -341,6 +357,9 @@ int main(int argc, char** argv)
   int in_fd;
   int out_fd;
   size_t filesize;
+
+  //sorted list;
+  struct ListNode* sortedList;
 
   //usage check
   if( argc != 4)
@@ -440,12 +459,8 @@ int main(int argc, char** argv)
 
   printf( "no problemo\n");
 
-  receiveAndMerge( mq_arr, n, filesize / 8);
-
-  //TODO: write sorted list to file.
-  //
-  //
-  //
+  sortedList = receiveAndMerge( mq_arr, n, filesize / 8);
+  writeToFile( out_fd, sortedList);
 
   //better wait.
   for( i = 0; i < n; i++)

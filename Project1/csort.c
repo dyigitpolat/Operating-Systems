@@ -17,6 +17,203 @@ struct ListNode
 void workerProcess( mqd_t mq, struct mq_attr attr, int i, int n, int fd, int filesize);
 int wait();
 int comp64( const void* a, const void* b);
+struct ListNode* receiveAndMerge( mqd_t* mq_arr, int n, long item_count); //TODO
+void writeToFile( FILE* fp, struct ListNode* sortedList); //TODO
+void freeList( struct ListNode* mynode);
+
+struct ListNode* receiveAndMerge( mqd_t* mq_arr, int n, long item_count)
+{
+  struct ListNode** heads;
+  struct ListNode** tails;
+  struct ListNode* sortedList;
+  struct ListNode* sortedListCur;
+  unsigned long long smallest;
+  long items_read;
+  int* done_arr;
+  int small_i;
+  int i;
+  int flag;
+  int flag2;
+
+  //init done_arr
+  done_arr = (int*) malloc( n * sizeof( int));
+  memset( done_arr, 0, n * sizeof( int));
+
+  //initialize list* arrays.
+  sortedList = (struct ListNode*) malloc( sizeof(struct ListNode));
+  sortedListCur = sortedList;
+
+  heads = (struct ListNode**) malloc( n * sizeof(struct ListNode*));
+  tails = (struct ListNode**) malloc( n * sizeof(struct ListNode*));
+  for( i = 0; i < n; i++)
+  {
+    heads[i] = (struct ListNode*) malloc( sizeof(struct ListNode));
+  }
+
+  for( i = 0; i < n; i++)
+  {
+    tails[i] = heads[i];
+  }
+
+  while( 1)
+  {
+    for( i = 0; i < n; i++)
+    {
+      if( !done_arr[i])
+      {
+        int bytes = 8;
+        while( bytes)
+        {
+          bytes -= mq_receive( mq_arr[i], (char*) &( tails[i]->val), 8, 0);
+        }
+      }
+
+      if( tails[i]->val)
+      {
+        printf("RECEIVED:::%lld FROM:::%d\n", tails[i]->val, i);
+        tails[i]->next = (struct ListNode*) malloc( sizeof(struct ListNode));
+        tails[i] = tails[i]->next;
+        tails[i]->val = 0;
+      }
+      else
+      {
+        if( !done_arr[i])
+          printf("RECEIVED:::%lld FROM:::%d\n", tails[i]->val, i);
+        done_arr[i] = 1;
+      }
+    }
+
+    smallest = 0;
+    flag = 0;
+    items_read = 0;
+    small_i = -1;
+    for( i = 0; i < n; i++)
+    {
+      if( !flag)
+      {
+        if( heads[i]->val)
+        {
+          smallest = heads[i]->val;
+          small_i = i;
+          flag = 1;
+        }
+      }
+      else if( heads[i]->val < smallest && heads[i]->val)
+      {
+        smallest = heads[i]->val;
+        small_i = i;
+      }
+    }
+
+    if( smallest && small_i != -1)
+    {
+      printf("INSERTED::: %lld\n", smallest);
+      sortedListCur->val = smallest;
+      sortedListCur->next = (struct ListNode*) malloc( sizeof(struct ListNode));
+      sortedListCur = sortedListCur->next;
+      sortedListCur->val = 0;
+
+      //we have read one more...
+      items_read++;
+
+      heads[small_i] = heads[small_i]->next;
+      //free(cur);
+    }
+    else
+    {
+      break;
+    }
+  }
+
+  /**
+    *debug purposed code.
+  for( i = 0; i < n; i++)
+  {
+    printf( "%d: ", i);
+    cur = heads[i];
+    while(cur)
+    {
+      printf( "%lld, ", cur->val);
+      cur = cur->next;
+    }
+    printf("\n");
+  }
+  **/
+
+  //
+  //
+  //we should add remaining in sorted order.
+  flag = 1; //not done
+  while( flag) //loop while not done.
+  {
+    flag = 0; //set done
+    memset( done_arr, 0, n * sizeof(int));
+    for( i = 0; i < n; i++)
+    {
+      if( !heads[i]->val)
+      {
+        done_arr[i] = 1;
+      }
+      else
+      {
+        flag = 1; //not done.
+      }
+    }
+
+    smallest = 0;
+    flag2 = 0;
+    items_read = 0;
+    small_i = -1;
+    for( i = 0; i < n; i++)
+    {
+      if( !flag2)
+      {
+        if( heads[i]->val)
+        {
+          smallest = heads[i]->val;
+          small_i = i;
+          flag2 = 1;
+        }
+      }
+      else if( heads[i]->val < smallest && heads[i]->val)
+      {
+        smallest = heads[i]->val;
+        small_i = i;
+      }
+    }
+
+    if( smallest && small_i != -1)
+    {
+      printf("INSERTED::: %lld\n", smallest);
+      sortedListCur->val = smallest;
+      sortedListCur->next = (struct ListNode*) malloc( sizeof(struct ListNode));
+      sortedListCur = sortedListCur->next;
+      sortedListCur->val = 0;
+
+      //we have read one more...
+      items_read++;
+
+      heads[small_i] = heads[small_i]->next;
+      //free(cur);
+    }
+
+  }
+  //
+  //
+  //
+
+  //pprint sorted
+  printf("SORTED LIST: \n" );
+  sortedListCur = sortedList;
+  while(sortedListCur)
+  {
+    printf( "%lld, ", sortedListCur->val);
+    sortedListCur = sortedListCur->next;
+  }
+  printf("\n");
+
+  return sortedList;
+}
 
 // a > b
 int comp64( const void* a, const void* b)
@@ -49,12 +246,11 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
   long read_len;
   long i;
   char* buffer;
-  unsigned long long c;
   struct ListNode* queueHead;
   struct ListNode* queueCur;
 
   //say hi
-  printf( "worker:%d/%d, mqid:%d, fd:%d, fsize:%d\n", proc+1, n, mq, fd, filesize);
+  //printf( "worker:%d/%d, mqid:%d, fd:%d, fsize:%d\n", proc+1, n, mq, fd, filesize);
 
   longs_count = filesize / 8;
   offset = 8 * proc * (longs_count / n);
@@ -68,7 +264,7 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
   {
     read_len =  8 * (longs_count / n);
   }
-  printf( "proc: %d offset -> %ld, read_len -> %ld\n", proc, offset, read_len);
+  //printf( "proc: %d offset -> %ld, read_len -> %ld\n", proc, offset, read_len);
 
   buffer = (char*) malloc( read_len * sizeof(char));
 
@@ -81,9 +277,9 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
 
   item_count = read_len / 8;
 
-  printf( "item count at %d : %ld\n", proc, item_count);
+  //printf( "item count at %d : %ld\n", proc, item_count);
 
-
+  /*
   // debug purposed code..
   printf("BEFORE SORT:\n");
   for( i = 0; i < item_count; i++)
@@ -91,10 +287,11 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
     printf( "%lld, ", ((unsigned long long*)buffer)[i]);
   }
   printf( "\n");
+  */
 
   qsort( buffer, item_count, sizeof( unsigned long long), comp64);
 
-
+  /*
   // debug purposed code..
   printf("AFTER SORT:\n");
   for( i = 0; i < item_count; i++)
@@ -102,7 +299,7 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
     printf( "%lld, ", ((unsigned long long*)buffer)[i]);
   }
   printf( "\n");
-
+  */
 
   //Tfill LL,
   queueHead = (struct ListNode*) malloc( sizeof( struct ListNode));
@@ -115,15 +312,6 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
     queueCur = queueCur->next;
   }
   queueCur->val = 0; //last is zero
-
-  //DEBUG LL
-  queueCur = queueHead;
-  for( i = 0; i <= item_count; i++)
-  {
-    printf( "PROC: %lld, node %ld: %lld \n", proc, i, queueCur->val);
-    queueCur = queueCur->next;
-  }
-
 
   //send messages.
   queueCur = queueHead;
@@ -146,22 +334,13 @@ int main(int argc, char** argv)
   mqd_t* mq_arr;
   struct mq_attr* attr_arr;
   pid_t* pid_arr;
-  int* done_arr;
-  unsigned long long* merge_buffer;
-  unsigned long long* sorted_arr;
 
   //other variables
   int n;
   unsigned long long i;
-  unsigned long long j;
-  unsigned long long received;
-  unsigned long long smallest;
   int in_fd;
   int out_fd;
-  int flag;
   size_t filesize;
-
-  unsigned long long c[5];
 
   //usage check
   if( argc != 4)
@@ -253,7 +432,6 @@ int main(int argc, char** argv)
     if( !pid_arr[i]) //worker only zone.
     {
       workerProcess(mq_arr[i], attr_arr[i], i, n, in_fd, filesize); // go gog o
-
       exit(0);
     }
   }
@@ -261,65 +439,8 @@ int main(int argc, char** argv)
 
 
   printf( "no problemo\n");
-  //wait for the messages
-  //TODO: receive messages... merge while receiving
-  //
-  //probably we should use n linked lists. take the head with the minimum
-  //amonst others.
-  //
-  //loop until no msgs
-  done_arr = (int*) malloc( n * sizeof(int) );
-  merge_buffer = ( unsigned long long*) malloc(  n * sizeof( unsigned long long) );
-  sorted_arr = ( unsigned long long*) malloc( filesize);
-  memset( done_arr, 0, n * sizeof(int));
 
-  flag = 1;
-  for( j = 0; flag;)
-  {
-    for ( i = 0; i < n; i++)
-    {
-      int bytes_read = 0;
-      if( !done_arr[i])
-        bytes_read = mq_receive( mq_arr[i], (char*) &merge_buffer[i], 8, 0);
-      else
-        printf("DONE: PROC:%lld\n", i);
-
-      printf( "%lld: received %lld from %lld\n", received, merge_buffer[i], i);
-      if( merge_buffer[i])
-        received++;
-      else
-        done_arr[i] = 1;
-    }
-
-    qsort( merge_buffer, n, sizeof( unsigned long long), comp64);
-
-    flag = 0;
-    for( i = 0; i < n; i++)
-    {
-      if( !done_arr[i])
-      {
-          flag = 1;
-      }
-    }
-
-    for( i = 0; i < n; i++)
-    {
-      if( merge_buffer[i])
-      {
-        sorted_arr[j++] = merge_buffer[i];
-        break;
-      }
-    }
-  }
-  //merge run
-  //endwhile
-
-  for( i = 0; i < filesize / 8; i++)
-  {
-    printf( "%lld, ", sorted_arr[i]);
-  }
-  printf( "\n");
-
+  receiveAndMerge( mq_arr, n, filesize / 8);
 
   //TODO: write sorted list to file.
   //
@@ -342,9 +463,6 @@ int main(int argc, char** argv)
   close( out_fd);
 
   //dealloc arrays.
-  free( merge_buffer);
-  free( sorted_arr);
-  free( done_arr);
   free( pid_arr);
   free( mq_arr);
   free( attr_arr);

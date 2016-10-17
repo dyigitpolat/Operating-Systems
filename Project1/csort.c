@@ -14,39 +14,52 @@ struct ListNode
   struct ListNode* next;
 };
 
+//subroutine that child processes will run
 void workerProcess( mqd_t mq, struct mq_attr attr, int i, int n, int fd, int filesize);
+//declare wait
 int wait();
+//compares two unsigned long longs. a > b will return positive.
 int comp64( const void* a, const void* b);
+//subroutine for main process to merge received messages, returns a linked list of sorted values
 struct ListNode* receiveAndMerge( mqd_t* mq_arr, int n, long item_count);
-void writeToFile( int fd, struct ListNode* sortedList); //TODO
+//write linked list contents to file
+void writeToFile( int fd, struct ListNode* sortedList);
+//free the linked list. (not implemented yet)
 void freeList( struct ListNode* mynode); //TODO
+
 
 void writeToFile( int fd, struct ListNode* sortedList)
 {
-  char number[128];
+  char number[128]; //number string buffer
   int i;
 
   while( sortedList && sortedList->val)
   {
+    //string representation of the long long
     sprintf(number, "%llu", sortedList->val);
     i = -1;
-    while( number[++i]);
-    write( fd, number,i);
-    write( fd, "\n", 1);
-    sortedList = sortedList->next;
+    while( number[++i]); //get length of the string seek to the end
+    write( fd, number,i); //write num to file
+    write( fd, "\n", 1); //append new line
+    sortedList = sortedList->next; //next num
   }
 }
 
 struct ListNode* receiveAndMerge( mqd_t* mq_arr, int n, long item_count)
 {
+  // queue consume
   struct ListNode** heads;
+  //queue populate
   struct ListNode** tails;
+  //head of final list
   struct ListNode* sortedList;
+  //temp ptr to move along the sortedList
   struct ListNode* sortedListCur;
+
   unsigned long long smallest;
-  long items_read;
-  int* done_arr;
-  int small_i;
+  long items_read; //count of items processed
+  int* done_arr; //keep track of finished queues
+  int small_i; //where is smallest at?
   int i;
   int flag;
   int flag2;
@@ -55,7 +68,7 @@ struct ListNode* receiveAndMerge( mqd_t* mq_arr, int n, long item_count)
   done_arr = (int*) malloc( n * sizeof( int));
   memset( done_arr, 0, n * sizeof( int));
 
-  //initialize list* arrays.
+  //initialize lists and list* arrays.
   sortedList = (struct ListNode*) malloc( sizeof(struct ListNode));
   sortedListCur = sortedList;
 
@@ -71,41 +84,50 @@ struct ListNode* receiveAndMerge( mqd_t* mq_arr, int n, long item_count)
     tails[i] = heads[i];
   }
 
-  while( 1)
+  /*
+  * THIS PART MAY BE VERY CONFUSING!
+  * READ THE COMMENTS CAREFULLY
+  * WHAT IT DOES IS BASICALLY CHOOSING THE SMALLEST RECEIVED
+  * VALUE AND PUTTING IT INTO OUR LIST
+  * RECEIVED VALES ARE STORED IN QUEUES (LL)
+  */
+  while( 1) //loop until
   {
     for( i = 0; i < n; i++)
     {
-      if( !done_arr[i])
+      if( !done_arr[i]) // if done dont try to receivw
       {
         int bytes = 8;
-        while( bytes)
+        while( bytes) //ensure that all bytes received.
         {
+          //receive 8 bytes as set in the attributes
+          //read into linked list val section.
           bytes -= mq_receive( mq_arr[i], (char*) &( tails[i]->val), 8, 0);
         }
       }
 
-      if( tails[i]->val)
+      if( tails[i]->val) //if non zero received, accept
       {
         printf("RECEIVED:::%lld FROM:::%d\n", tails[i]->val, i);
-        tails[i]->next = (struct ListNode*) malloc( sizeof(struct ListNode));
-        tails[i] = tails[i]->next;
+        tails[i]->next = (struct ListNode*) malloc( sizeof(struct ListNode)); //add node
+        tails[i] = tails[i]->next; //wait for next number
         tails[i]->val = 0;
       }
-      else
+      else //if zero is received
       {
         if( !done_arr[i])
           printf("RECEIVED:::%lld FROM:::%d\n", tails[i]->val, i);
-        done_arr[i] = 1;
+        done_arr[i] = 1; //last element, turn this queue off.
       }
     }
 
     smallest = 0;
     flag = 0;
     items_read = 0;
-    small_i = -1;
-    for( i = 0; i < n; i++)
+    small_i = -1; //-1 means no elements are available in that current run.
+    for( i = 0; i < n; i++) //find minimum
     {
-      if( !flag)
+      if( !flag) //first elem case.
       {
         if( heads[i]->val)
         {
@@ -121,7 +143,7 @@ struct ListNode* receiveAndMerge( mqd_t* mq_arr, int n, long item_count)
       }
     }
 
-    if( smallest && small_i != -1)
+    if( smallest && small_i != -1) //if valid smallest...
     {
       printf("INSERTED::: %lld\n", smallest);
       sortedListCur->val = smallest;
@@ -135,7 +157,7 @@ struct ListNode* receiveAndMerge( mqd_t* mq_arr, int n, long item_count)
       heads[small_i] = heads[small_i]->next;
       //free(cur);
     }
-    else
+    else //could process no more
     {
       break;
     }
@@ -159,6 +181,7 @@ struct ListNode* receiveAndMerge( mqd_t* mq_arr, int n, long item_count)
   //
   //
   //we should add remaining in sorted order.
+  // same as above but no receive this time..
   flag = 1; //not done
   while( flag) //loop while not done.
   {
@@ -180,7 +203,7 @@ struct ListNode* receiveAndMerge( mqd_t* mq_arr, int n, long item_count)
     flag2 = 0;
     items_read = 0;
     small_i = -1;
-    for( i = 0; i < n; i++)
+    for( i = 0; i < n; i++) //find minimum
     {
       if( !flag2)
       {
@@ -198,7 +221,7 @@ struct ListNode* receiveAndMerge( mqd_t* mq_arr, int n, long item_count)
       }
     }
 
-    if( smallest && small_i != -1)
+    if( smallest && small_i != -1) //insert
     {
       printf("INSERTED::: %lld\n", smallest);
       sortedListCur->val = smallest;
@@ -321,7 +344,7 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
   queueHead = (struct ListNode*) malloc( sizeof( struct ListNode));
   queueCur = queueHead;
 
-  for( i = 0; i < item_count; i++)
+  for( i = 0; i < item_count; i++) // put teh nums in tha queue
   {
     queueCur->val = ((unsigned long long*)buffer)[i];
     queueCur->next = (struct ListNode*) malloc( sizeof( struct ListNode));
@@ -331,7 +354,7 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
 
   //send messages.
   queueCur = queueHead;
-  for( i = 0; i <= item_count; i++)
+  for( i = 0; i <= item_count; i++) // send from tha queue
   {
     mq_send(mq, (char*) &queueCur->val, 8, 0);
     queueCur = queueCur->next;
@@ -403,7 +426,7 @@ int main(int argc, char** argv)
   //input file length??
   filesize = lseek(in_fd, 0, SEEK_END);
 
-  //set msg q attributes accordingly
+  //set msg q attributes accordingly msgsize = 8 is very important.
   struct mq_attr attrib;
   attrib.mq_flags = 0;
   attrib.mq_maxmsg = 8;
@@ -456,7 +479,7 @@ int main(int argc, char** argv)
   }
 
 
-
+  //if we can reach here...
   printf( "no problemo\n");
 
   sortedList = receiveAndMerge( mq_arr, n, filesize / 8);
@@ -468,7 +491,7 @@ int main(int argc, char** argv)
     wait();
   }
 
-  //nothing to do here, set everything on fire.
+  //nothing to do here, set everything on fire. we are all done.
   for( i = 0; i < n; i++)
   {
     mq_close( mq_arr[i]);

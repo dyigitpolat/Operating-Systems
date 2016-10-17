@@ -104,7 +104,7 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
   printf( "\n");
 
 
-  //TODO: fill LL,
+  //Tfill LL,
   queueHead = (struct ListNode*) malloc( sizeof( struct ListNode));
   queueCur = queueHead;
 
@@ -118,16 +118,16 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
 
   //DEBUG LL
   queueCur = queueHead;
-  for( i = 0; i < item_count; i++)
+  for( i = 0; i <= item_count; i++)
   {
     printf( "PROC: %lld, node %ld: %lld \n", proc, i, queueCur->val);
     queueCur = queueCur->next;
   }
 
 
-  //TODO: send messages.
+  //send messages.
   queueCur = queueHead;
-  for( i = 0; i < item_count; i++)
+  for( i = 0; i <= item_count; i++)
   {
     mq_send(mq, (char*) &queueCur->val, 8, 0);
     queueCur = queueCur->next;
@@ -155,8 +155,10 @@ int main(int argc, char** argv)
   long long int i;
   long long int j;
   long long int received;
+  long long int smallest;
   int in_fd;
   int out_fd;
+  int flag;
   size_t filesize;
 
   long long int c[5];
@@ -203,24 +205,30 @@ int main(int argc, char** argv)
   //input file length??
   filesize = lseek(in_fd, 0, SEEK_END);
 
+
+  struct mq_attr attrib;
+  attrib.mq_flags = 0;
+  attrib.mq_maxmsg = 8;
+  attrib.mq_msgsize = 8;
+  attrib.mq_curmsgs = 0;
   //init message queues, pass them to workers
   for( i = 0; i < n; i++)
   {
     switch (i) {
       case 0:
-        mq_arr[i] = mq_open("/mqname1", O_RDWR | O_CREAT, 0666, NULL);
+        mq_arr[i] = mq_open("/mqname1", O_RDWR | O_CREAT, 0666, &attrib);
         break;
       case 1:
-        mq_arr[i] = mq_open("/mqname2", O_RDWR | O_CREAT, 0666, NULL);
+        mq_arr[i] = mq_open("/mqname2", O_RDWR | O_CREAT, 0666, &attrib);
         break;
       case 2:
-        mq_arr[i] = mq_open("/mqname3", O_RDWR | O_CREAT, 0666, NULL);
+        mq_arr[i] = mq_open("/mqname3", O_RDWR | O_CREAT, 0666, &attrib);
         break;
       case 3:
-        mq_arr[i] = mq_open("/mqname4", O_RDWR | O_CREAT, 0666, NULL);
+        mq_arr[i] = mq_open("/mqname4", O_RDWR | O_CREAT, 0666, &attrib);
         break;
       case 4:
-        mq_arr[i] = mq_open("/mqname5", O_RDWR | O_CREAT, 0666, NULL);
+        mq_arr[i] = mq_open("/mqname5", O_RDWR | O_CREAT, 0666, &attrib);
         break;
     }
 
@@ -247,19 +255,24 @@ int main(int argc, char** argv)
   printf( "no problemo\n");
   //wait for the messages
   //TODO: receive messages... merge while receiving
+  //
+  //probably we should use n linked lists. take the head with the minimum
+  //amonst others. 
+  //
   //loop until no msgs
   done_arr = (int*) malloc( n * sizeof(int) );
-  merge_buffer = ( long long int*) malloc( n * sizeof(long long));
+  merge_buffer = ( long long int*) malloc(  n * sizeof( long long int) );
   sorted_arr = ( long long int*) malloc( filesize);
   memset( done_arr, 0, n * sizeof(int));
 
-  j = 0;
-  for( received = 0; received < filesize / 8;)
+  flag = 1;
+  for( j = 0; flag;)
   {
     for ( i = 0; i < n; i++)
     {
+      int bytes_read = 0;
       if( !done_arr[i])
-        mq_receive( mq_arr[i], (char*) &merge_buffer[i], attr_arr[i].mq_msgsize, 0);
+        bytes_read = mq_receive( mq_arr[i], (char*) &merge_buffer[i], 8, 0);
       else
         printf("DONE: PROC:%lld\n", i);
 
@@ -272,10 +285,22 @@ int main(int argc, char** argv)
 
     qsort( merge_buffer, n, sizeof( long long int), comp64);
 
-    for ( i = 0; i < n; i++)
+    flag = 0;
+    for( i = 0; i < n; i++)
+    {
+      if( !done_arr[i])
+      {
+          flag = 1;
+      }
+    }
+
+    for( i = 0; i < n; i++)
     {
       if( merge_buffer[i])
+      {
         sorted_arr[j++] = merge_buffer[i];
+        break;
+      }
     }
   }
   //merge run

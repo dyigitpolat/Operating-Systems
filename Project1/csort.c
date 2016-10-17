@@ -10,7 +10,7 @@
 
 struct ListNode
 {
-  long long int val;
+  unsigned long long val;
   struct ListNode* next;
 };
 
@@ -21,11 +21,11 @@ int comp64( const void* a, const void* b);
 // a > b
 int comp64( const void* a, const void* b)
 {
-  long long int aval;
-  long long int bval;
+  unsigned long long aval;
+  unsigned long long bval;
 
-  aval = *( long long int*)a;
-  bval = *( long long int*)b;
+  aval = *( unsigned long long*)a;
+  bval = *( unsigned long long*)b;
 
   if( aval > bval)
   {
@@ -43,13 +43,13 @@ int comp64( const void* a, const void* b)
 
 void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int filesize)
 {
-  long int longs_count;
-  long int item_count;
-  long int offset;
-  long int read_len;
-  long int i;
+  long longs_count;
+  long item_count;
+  long offset;
+  long read_len;
+  long i;
   char* buffer;
-  long long int c;
+  unsigned long long c;
   struct ListNode* queueHead;
   struct ListNode* queueCur;
 
@@ -88,18 +88,18 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
   printf("BEFORE SORT:\n");
   for( i = 0; i < item_count; i++)
   {
-    printf( "%lld, ", ((long long int*)buffer)[i]);
+    printf( "%lld, ", ((unsigned long long*)buffer)[i]);
   }
   printf( "\n");
 
-  qsort( buffer, item_count, sizeof( long long int), comp64);
+  qsort( buffer, item_count, sizeof( unsigned long long), comp64);
 
 
   // debug purposed code..
   printf("AFTER SORT:\n");
   for( i = 0; i < item_count; i++)
   {
-    printf( "%lld, ", ((unsigned long long int*)buffer)[i]);
+    printf( "%lld, ", ((unsigned long long*)buffer)[i]);
   }
   printf( "\n");
 
@@ -110,7 +110,7 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
 
   for( i = 0; i < item_count; i++)
   {
-    queueCur->val = ((long long*)buffer)[i];
+    queueCur->val = ((unsigned long long*)buffer)[i];
     queueCur->next = (struct ListNode*) malloc( sizeof( struct ListNode));
     queueCur = queueCur->next;
   }
@@ -147,21 +147,21 @@ int main(int argc, char** argv)
   struct mq_attr* attr_arr;
   pid_t* pid_arr;
   int* done_arr;
-  long long int* merge_buffer;
-  long long int* sorted_arr;
+  unsigned long long* merge_buffer;
+  unsigned long long* sorted_arr;
 
   //other variables
   int n;
-  long long int i;
-  long long int j;
-  long long int received;
-  long long int smallest;
+  unsigned long long i;
+  unsigned long long j;
+  unsigned long long received;
+  unsigned long long smallest;
   int in_fd;
   int out_fd;
   int flag;
   size_t filesize;
 
-  long long int c[5];
+  unsigned long long c[5];
 
   //usage check
   if( argc != 4)
@@ -205,12 +205,20 @@ int main(int argc, char** argv)
   //input file length??
   filesize = lseek(in_fd, 0, SEEK_END);
 
-
+  //set msg q attributes accordingly
   struct mq_attr attrib;
   attrib.mq_flags = 0;
   attrib.mq_maxmsg = 8;
   attrib.mq_msgsize = 8;
   attrib.mq_curmsgs = 0;
+
+  //kernel should reset links.. otherwise any failure results with death.
+  mq_unlink("/mqname1");
+  mq_unlink("/mqname2");
+  mq_unlink("/mqname3");
+  mq_unlink("/mqname4");
+  mq_unlink("/mqname5");
+
   //init message queues, pass them to workers
   for( i = 0; i < n; i++)
   {
@@ -257,12 +265,12 @@ int main(int argc, char** argv)
   //TODO: receive messages... merge while receiving
   //
   //probably we should use n linked lists. take the head with the minimum
-  //amonst others. 
+  //amonst others.
   //
   //loop until no msgs
   done_arr = (int*) malloc( n * sizeof(int) );
-  merge_buffer = ( long long int*) malloc(  n * sizeof( long long int) );
-  sorted_arr = ( long long int*) malloc( filesize);
+  merge_buffer = ( unsigned long long*) malloc(  n * sizeof( unsigned long long) );
+  sorted_arr = ( unsigned long long*) malloc( filesize);
   memset( done_arr, 0, n * sizeof(int));
 
   flag = 1;
@@ -283,7 +291,7 @@ int main(int argc, char** argv)
         done_arr[i] = 1;
     }
 
-    qsort( merge_buffer, n, sizeof( long long int), comp64);
+    qsort( merge_buffer, n, sizeof( unsigned long long), comp64);
 
     flag = 0;
     for( i = 0; i < n; i++)
@@ -325,11 +333,6 @@ int main(int argc, char** argv)
   }
 
   //nothing to do here, set everything on fire.
-  mq_unlink("/mqname1");
-  mq_unlink("/mqname2");
-  mq_unlink("/mqname3");
-  mq_unlink("/mqname4");
-  mq_unlink("/mqname5");
   for( i = 0; i < n; i++)
   {
     mq_close( mq_arr[i]);

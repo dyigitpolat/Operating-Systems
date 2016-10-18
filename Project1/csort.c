@@ -24,9 +24,28 @@ int comp64( const void* a, const void* b);
 struct ListNode* receiveAndMerge( mqd_t* mq_arr, int n, long item_count);
 //write linked list contents to file
 void writeToFile( int fd, struct ListNode* sortedList);
-//free the linked list. (not implemented yet)
-void freeList( struct ListNode* mynode); //TODO
+//free the linked list.
+void freeList( struct ListNode* mynode);
 
+void freeList( struct ListNode* mynode)
+{
+	struct ListNode* prev;
+	struct ListNode* cur;
+	int i;
+
+	prev = mynode;
+	cur = prev;
+	i = 0;
+	while(cur)
+	{
+		cur = prev->next;
+		free(prev);
+		prev = cur;
+		i++;
+	}
+
+	printf("%d nodes freed.\n", i);
+}
 
 void writeToFile( int fd, struct ListNode* sortedList)
 {
@@ -47,6 +66,8 @@ void writeToFile( int fd, struct ListNode* sortedList)
 
 struct ListNode* receiveAndMerge( mqd_t* mq_arr, int n, long item_count)
 {
+  //queue heads for freeing
+  struct ListNode** static_heads;
   // queue consume
   struct ListNode** heads;
   //queue populate
@@ -74,6 +95,7 @@ struct ListNode* receiveAndMerge( mqd_t* mq_arr, int n, long item_count)
 
   heads = (struct ListNode**) malloc( n * sizeof(struct ListNode*));
   tails = (struct ListNode**) malloc( n * sizeof(struct ListNode*));
+  static_heads = (struct ListNode**) malloc( n * sizeof(struct ListNode*));
   for( i = 0; i < n; i++)
   {
     heads[i] = (struct ListNode*) malloc( sizeof(struct ListNode));
@@ -82,6 +104,11 @@ struct ListNode* receiveAndMerge( mqd_t* mq_arr, int n, long item_count)
   for( i = 0; i < n; i++)
   {
     tails[i] = heads[i];
+  }
+
+  for( i = 0; i < n; i++)
+  {
+    static_heads[i] = heads[i];
   }
 
   /*
@@ -251,6 +278,16 @@ struct ListNode* receiveAndMerge( mqd_t* mq_arr, int n, long item_count)
   }
   printf("\n");
 
+  //free lists that are not used
+  for( i = 0; i < n; i++)
+  {
+    freeList(static_heads[i]);
+  }
+  free(tails);
+  free(heads);
+  free(static_heads);
+  free(done_arr);
+
   return sortedList;
 }
 
@@ -363,7 +400,8 @@ void workerProcess( mqd_t mq, struct mq_attr attr, int proc, int n, int fd, int 
   //bye bye
   free( buffer);
 
-  //TODO: freelist.
+  // freelist.
+  freeList( queueHead);
 
 }
 
@@ -504,6 +542,9 @@ int main(int argc, char** argv)
   free( pid_arr);
   free( mq_arr);
   free( attr_arr);
+
+  //free list
+  freeList( sortedList);
 
   return 0;
 }

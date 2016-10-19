@@ -22,7 +22,7 @@ _modify it as you wish_
 **\# make** //compile kernel module  
 **\# insmod modpcb.ko** //to insert our lovely module  
 **\# dmesg | tail** //to see what our lovely kernel module says when inserted  
-**\# rmmod modpcb.ko** //lets remove it from the kernel  
+**\# rmmod modpcb** //lets remove it from the kernel  
 **\# dmesg | tail** //to see what our cute kernel module says when leaving us :(  
 
 

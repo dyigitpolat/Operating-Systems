@@ -1,12 +1,13 @@
 # Project 1: 
 ## Concurrency and Message Passing
 
-n worker processes read a binary file and sort the 64 bit unsigned positive integers in a parallel manner.
+'n' worker processes read a binary file and sort the 64 bit unsigned positive integers in a parallel manner.
 To merge results, we are utilizing posix messaging queues.
 
 ## Simple Kernel Module
 
-We can program our own kernel module easily and insert it into the Linux kernel. Our kernel module is inserted we can perform any privileged action as our program is running in the kernel mode.
+We can program our own kernel module easily and insert it into the Linux kernel. Our kernel module is inserted we can perform any privileged action as our program is running in the kernel mode. We are inspecting a process with the given ID in this module.
+To compile a kernel module, you need to have linux headers in your machine. Its not that hard just google "Installing linux headers" and stackoverflow will probably do its job.
 
 
 ## Usage

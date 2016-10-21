@@ -19,7 +19,7 @@ _modify it as you wish_
 **$ csort \<n> \<input_file> \<output_file>**  
 
 ### SIMPLE KERNEL MODULE
-```c
+```bash
 **\# make** #compile kernel module  
 **\# insmod modpcb.ko param_pid=XXX** #to insert our lovely module and specify a process id to inspect, (change XXX)   
 **\# dmesg | tail** #to see what our lovely kernel module says when inserted  

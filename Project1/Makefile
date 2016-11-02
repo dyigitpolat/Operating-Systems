@@ -1,4 +1,4 @@
-obj-m += modpcb.o testmodule.o
+obj-m += modpcb.o
 
 all:
 	gcc -g -Wall -o csort csort.c -lrt

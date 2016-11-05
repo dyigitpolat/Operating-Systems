@@ -5,7 +5,7 @@
 #include <string.h>
 #include <pthread.h>
 
-#define u64 unsigned long long
+#define u64 long long
 
 //will be useful while sorting.
 struct caller
@@ -36,12 +36,6 @@ struct callerList
   struct callerList* next;
 };
 
-struct calledList
-{
-  u64 id;
-  struct calledList* next;
-};
-
 /*
 Global variables here
 */
@@ -60,11 +54,51 @@ FILE* outfile;
 
 void mapper();
 void reducer();
+void merger();
 void* mapperThread( int i);
 void* reducerThread( int i);
+void freeList( struct callList* mynode);
+void freeList2( struct callerList* mynode);
 struct caller* countCallers( struct call* call_arr, long count, long* reduced_count);
 struct callList* appendToList( FILE* fp, struct callList* myList, long* count);
+struct callerList* appendToList2( FILE* fp, struct callerList* myList, long* count);
 struct call* sortByCallerId( struct callList* myList, long count);
+
+void freeList( struct callList* mynode)
+{
+	struct callList* prev;
+	struct callList* cur;
+	int i;
+
+	prev = mynode;
+	cur = prev;
+	i = 0;
+	while(cur)
+	{
+		cur = prev->next;
+		free(prev);
+		prev = cur;
+		i++;
+	}
+}
+
+void freeList2( struct callerList* mynode)
+{
+	struct callerList* prev;
+	struct callerList* cur;
+	int i;
+
+	prev = mynode;
+	cur = prev;
+	i = 0;
+	while(cur)
+	{
+		cur = prev->next;
+		free(prev);
+		prev = cur;
+		i++;
+	}
+}
 
 int compareCalls( const void* a, const void* b)
 {
@@ -129,13 +163,33 @@ struct callList* appendToList( FILE* fp, struct callList* myList, long* count)
   return myList;
 }
 
+struct callerList* appendToList2( FILE* fp, struct callerList* myList, long* count)
+{
+  u64 callerID;
+  long cnt;
+  struct callerList* curList;
+
+  while( EOF != fscanf(fp, "%llu %ld\n", &callerID, &cnt))
+  {
+    curList = (struct callerList*) malloc( sizeof( struct callerList));
+    curList->id = callerID;
+    curList->count = cnt;
+    curList->next = myList;
+    myList = curList;
+    (*count)++;
+  }
+
+  return myList;
+}
+
 struct caller* countCallers( struct call* call_arr, long count, long* reduced_count)
 {
   struct caller* reduced_callers;
   struct callerList* curList;
+  struct callerList* head;
   struct callerList* myList;
   long newcount;
-  long i, j, last, numb;
+  long i, j, last;
   int unique;
 
   //initialize for the first elem.
@@ -143,6 +197,7 @@ struct caller* countCallers( struct call* call_arr, long count, long* reduced_co
   myList->id = (count ? call_arr[0].callerID : 0);
   myList->count = 0;
   myList->next = 0;
+  head = myList;
 
   newcount = (count ? 1 : 0);
   last = 0;
@@ -183,6 +238,7 @@ struct caller* countCallers( struct call* call_arr, long count, long* reduced_co
   }
 
   *reduced_count = newcount;
+  freeList2( head);
   return reduced_callers;
 }
 
@@ -225,10 +281,72 @@ void* reducerThread( int p)
 
   for( i = 0; i < reduced_count; i++)
   {
-    fprintf(temp_files_out[p], "%llu %ld\n", reduced_callers[i].id, reduced_callers[i].count);
+    fprintf( temp_files_out[p], "%llu %ld\n", reduced_callers[i].id, reduced_callers[i].count);
   }
 
+  freeList( myList);
+  free( sorted_arr);
+  free( reduced_callers);
   pthread_exit(0);
+}
+
+void merger()
+{
+  char tmp_f_name[256];
+  struct callerList** sorted_lists;
+  struct callerList** sorted_heads;
+  u64 minid;
+  long* counts;
+  long i, minindex;
+
+  sorted_heads = (struct callerList**) malloc( sizeof(struct callerList*) * R);
+  sorted_lists = (struct callerList**) malloc( sizeof(struct callerList*) * R);
+  counts = (long*) malloc( sizeof(long) * R);
+
+  for( i = 0; i < R; i++)
+  {
+    sprintf( tmp_f_name, "temp-out-%ld", i);
+    freopen( tmp_f_name, "r", temp_files_out[i]);
+
+    sorted_lists[i] = 0;
+    sorted_lists[i] = appendToList2( temp_files_out[i], sorted_lists[i], &counts[i]);
+    sorted_heads[i] = sorted_lists[i];
+  }
+
+  do
+  {
+    minid = -1;
+    for( i = 0; i < R; i++)
+    {
+      if( sorted_lists[i])
+      {
+        if( minid < 0 || sorted_lists[i]->id < minid)
+        {
+          minid = sorted_lists[i]->id;
+          minindex = i;
+        }
+      }
+    }
+
+    if( minid > 0)
+    {
+      //printf( "%llu %ld\n", minid, sorted_lists[minindex]->count);
+      fprintf( outfile, "%llu %ld\n", minid, sorted_lists[minindex]->count);
+
+      sorted_lists[minindex] = sorted_lists[minindex]->next;
+    }
+
+  } while(minid > 0);
+
+  for( i = 0; i < R; i++)
+  {
+    if( sorted_heads[i]);
+      freeList2( sorted_heads[i]);
+  }
+
+  free(sorted_heads);
+  free(sorted_lists);
+  free(counts);
 }
 
 void mapper()
@@ -262,6 +380,7 @@ void mapper()
     freopen( tmp_f_name, "r", temp_files[i]);
   }
 
+  free(tids);
 }
 
 void reducer()
@@ -279,15 +398,15 @@ void reducer()
   {
     pthread_join( tids[i], 0);
   }
+
+  free(tids);
 }
-
-
 
 
 int main( int argc, char *argv[])
 {
   char buffer[256];
-  int i, j, k; // loop variables
+  int i; // loop variables
 
   //validate input format
   if( argc < 2)
@@ -341,6 +460,8 @@ int main( int argc, char *argv[])
     infiles[i] = fopen( inFileNames[i], "r");
   }
 
+  outfile = fopen( "out", "w");
+
   //start the game :))
   printf( "proceed to execution...\n");
 
@@ -352,16 +473,37 @@ int main( int argc, char *argv[])
   reducer();
   printf( "reducer() done\n");
 
+  //sorted merge
+  merger();
+  printf( "merger() done\n");
 
-  //out file...
+  //close or remove files
+  for( i = 0; i < N; i++)
+  {
+    fclose( infiles[i]);
 
-  //remove files
+  }
+
+  fclose( outfile);
+
   for( i = 0; i < N*R; i++)
   {
     fclose( temp_files[i]);
     sprintf( buffer, "temp%d-%d", i/R, i%R);
     remove( buffer);
   }
+
+  for( i = 0; i < R; i++)
+  {
+    fclose( temp_files_out[i]);
+    sprintf( buffer, "temp-out-%d", i);
+    remove( buffer);
+  }
+
+  free(temp_files);
+  free(temp_files_out);
+  free(inFileNames);
+  free(infiles);
 
 	return 0;
 }
